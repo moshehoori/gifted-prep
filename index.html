@@ -1261,11 +1261,39 @@
       pushToCloud().then(() => syncFromCloud(true));
     }
 
+    function setFamilyCode(code) {
+      appState.familyCode = code.trim();
+      localStorage.setItem("yonatan_family_code", appState.familyCode);
+    }
+
+    function setCustomCloudUrl(url) {
+      localStorage.setItem("yonatan_custom_cloud_url", url.trim());
+    }
+
+    function applyConnectionLink() {
+      const params = new URLSearchParams(window.location.hash.slice(1));
+      const code = (params.get("family") || "").trim();
+      const db = (params.get("db") || "").trim();
+      if (!/^[a-zA-Z0-9_-]{1,128}$/.test(code) || !db) return;
+      try {
+        const url = new URL(db);
+        if (url.protocol !== "https:" || url.username || url.password || url.port ||
+            url.search || url.hash || url.pathname !== "/" ||
+            !/^[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)?\.firebasedatabase\.app$/.test(url.hostname) &&
+            !/^[a-zA-Z0-9-]+\.firebaseio\.com$/.test(url.hostname)) return;
+        setFamilyCode(code);
+        setCustomCloudUrl(url.origin);
+        // Keep the connection details out of the address bar after saving them.
+        history.replaceState(null, "", window.location.pathname + window.location.search);
+      } catch (e) {
+        // Ignore malformed connection links and keep the existing settings.
+      }
+    }
+
     function promptFamilyCode() {
       const code = prompt("הזן קוד משפחה משותף ליונתן ולאבא (למשל yonatan-2027):", appState.familyCode);
       if (code && code.trim()) {
-        appState.familyCode = code.trim();
-        localStorage.setItem("yonatan_family_code", appState.familyCode);
+        setFamilyCode(code);
         document.getElementById("familyCodeLabel").textContent = appState.familyCode;
         loadLocalState();
         renderAllTabs();
@@ -1283,7 +1311,7 @@
     }
     function saveCloudSettingsModal() {
       const val = document.getElementById("customCloudUrlInput").value.trim();
-      localStorage.setItem("yonatan_custom_cloud_url", val);
+      setCustomCloudUrl(val);
       closeCloudSettingsModal();
       forceSync();
     }
@@ -1935,13 +1963,16 @@
     }
 
     // Startup initialization
-    window.addEventListener("DOMContentLoaded", () => {
+    function initializeApp() {
+      applyConnectionLink();
       document.getElementById("familyCodeLabel").textContent = appState.familyCode;
       loadLocalState();
       renderAllTabs();
       syncFromCloud(false);
       connectRealtimeStream();
-    });
+    }
+    window.addEventListener("DOMContentLoaded", initializeApp);
+    window.addEventListener("hashchange", initializeApp);
   </script>
 </body>
 </html>
